@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 
 import pytest
 
@@ -70,3 +71,32 @@ def test_parse_args_rejects_trade_without_action() -> None:
         iwencai_cli.parse_args(["trade"])
 
     assert exc_info.value.code == 2
+
+
+def test_main_renders_interactive_setup_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        iwencai_cli,
+        "parse_args",
+        lambda: argparse.Namespace(command="query2data", format="json", output=None),
+    )
+
+    def fake_handle_query2data_command(args: argparse.Namespace) -> dict:
+        raise iwencai_cli.InteractiveSetupExit(
+            status="timed_out",
+            message="等待 API 密钥配置已超时，当前命令未执行。",
+            exit_code=2,
+        )
+
+    monkeypatch.setattr(iwencai_cli, "handle_query2data_command", fake_handle_query2data_command)
+
+    with pytest.raises(SystemExit) as exc_info:
+        iwencai_cli.main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exc_info.value.code == 2
+    assert payload["success"] is False
+    assert payload["status"] == "timed_out"
+    assert "当前命令未执行" in payload["message"]

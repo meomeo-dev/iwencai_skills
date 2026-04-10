@@ -70,6 +70,7 @@ help_surface:
     - iwencai -q "2连板股票"
     - 认证 UX
     - 未配置密钥时，交互式终端会自动拉起本地配置页
+    - 默认等待 10 分钟
     - Query 写法
     - 主体 + 指标/事件
     - 实体/主题 + 内容类型 + 时间词
@@ -81,7 +82,7 @@ help_surface:
     - 输出控制
     - 不需要指定 skill
     - 问财更像弱 DSL
-    - 交互式终端会自动打开本地配置页
+    - 交互式终端会自动打开本地配置页并显示倒计时
     - 主体 + 指标/事件
     - 范围 + 条件/排序 + 时间窗
   search_markers:
@@ -91,7 +92,7 @@ help_surface:
     - 输出控制
     - 可用 channel
     - announcement, investor, news, report
-    - 交互式终端会自动打开本地配置页
+    - 交互式终端会自动打开本地配置页并显示倒计时
     - 实体/主题 + 内容类型 + 时间词
     - 不要只写公司名或主题名
     - 多主体时拆分查询
@@ -110,3 +111,5 @@ common_error_codes:
   - invalid_date
   - invalid_trade_quantity
   - invalid_trade_direction
+  - interactive_api_key_setup_timed_out
+  - interactive_api_key_setup_cancelled

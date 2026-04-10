@@ -112,6 +112,30 @@ def test_launch_api_key_setup_page_persists_dotenv(tmp_path: Path) -> None:
     )
 
 
+def test_render_api_key_setup_form_contains_countdown() -> None:
+    html_text = iwencai_cli._render_api_key_setup_form(  # noqa: SLF001
+        Path("/tmp/.env"),
+        timeout_seconds=iwencai_cli.DEFAULT_API_KEY_SETUP_TIMEOUT_SECONDS,
+    )
+
+    assert "倒计时" in html_text
+    assert "10 分钟" in html_text
+    assert 'id="countdown"' in html_text
+
+
+def test_launch_api_key_setup_page_times_out_with_friendly_message(tmp_path: Path) -> None:
+    with pytest.raises(iwencai_cli.InteractiveSetupExit) as exc_info:
+        iwencai_cli.launch_api_key_setup_page(
+            dotenv_path=tmp_path / ".env",
+            env={},
+            open_browser=False,
+            timeout_seconds=1,
+        )
+
+    assert exc_info.value.status == "timed_out"
+    assert "当前命令未执行" in exc_info.value.message
+
+
 def test_ensure_no_proxy_hosts_merges_runtime_hosts_and_preserves_existing() -> None:
     env = {"NO_PROXY": "localhost,127.0.0.1"}
 

@@ -44,7 +44,7 @@ DEFAULT_PAGE = "1"
 DEFAULT_LIMIT = "10"
 DEFAULT_IS_CACHE = "1"
 DEFAULT_EXPAND_INDEX = "true"
-DEFAULT_API_KEY_SETUP_TIMEOUT_SECONDS = 300
+DEFAULT_API_KEY_SETUP_TIMEOUT_SECONDS = 600
 SEARCH_CHANNELS = ("announcement", "investor", "news", "report")
 SEARCH_CHANNEL_HELP = ", ".join(SEARCH_CHANNELS)
 DEFAULT_NO_PROXY_HOSTS = tuple(
@@ -83,7 +83,8 @@ ROOT_EPILOG = (
     "  trade       模拟炒股开户、下单、持仓、资金、成交查询\n\n"
     "认证 UX:\n"
     "  query2data/search 未配置密钥时，交互式终端会自动拉起本地配置页\n"
-    "  页面支持粘贴 API key，并可选择保存到当前目录 .env\n\n"
+    "  页面支持粘贴 API key，并可选择保存到当前目录 .env\n"
+    "  默认等待 10 分钟，页面会显示倒计时；未完成时本次命令不会继续执行\n\n"
     "Query 写法:\n"
     "  query2data  主体 + 指标/事件；筛选时写 范围 + 条件/排序 + 时间窗\n"
     "  search      实体/主题 + 内容类型 + 时间词，如 公告/新闻/研究报告/投关活动\n"
@@ -95,7 +96,7 @@ QUERY2DATA_DESCRIPTION = (
     "直接调用官方 query2data family。\n"
     "问财更像弱 DSL，不是闲聊句子。\n"
     "适合自然语言条件查询、选股、排行、指标筛选；不需要指定 skill。\n"
-    "若未配置 IWENCAI_API_KEY，交互式终端会自动打开本地配置页。"
+    "若未配置 IWENCAI_API_KEY，交互式终端会自动打开本地配置页并显示倒计时。"
 )
 QUERY2DATA_EPILOG = (
     "推荐 query 写法:\n"
@@ -110,7 +111,7 @@ QUERY2DATA_EPILOG = (
 SEARCH_DESCRIPTION = (
     "直接调用官方 comprehensive/search family。\n"
     "适合搜索公告、新闻、研报、投资者关系活动；不指定 --channel 时会搜索全部官方频道。\n"
-    "若未配置 IWENCAI_API_KEY，交互式终端会自动打开本地配置页。"
+    "若未配置 IWENCAI_API_KEY，交互式终端会自动打开本地配置页并显示倒计时。"
 )
 SEARCH_EPILOG = (
     "推荐 query 写法:\n"
@@ -158,6 +159,16 @@ class IWenCaiAPIError(Exception):
 
 class SimTradeAPIError(Exception):
     """模拟炒股运行时异常。"""
+
+
+class InteractiveSetupExit(Exception):
+    """交互式配置未完成，但不属于系统异常。"""
+
+    def __init__(self, status: str, message: str, exit_code: int = 2):
+        super().__init__(message)
+        self.status = status
+        self.message = message
+        self.exit_code = exit_code
 
 
 def should_auto_launch_api_key_setup(
@@ -211,7 +222,20 @@ def upsert_dotenv_variable(dotenv_path: Path, key: str, value: str) -> Path:
     return resolved_path
 
 
-def _render_api_key_setup_form(dotenv_path: Path, *, error_message: str | None = None) -> str:
+def _format_duration_label(timeout_seconds: float) -> str:
+    whole_seconds = max(1, int(timeout_seconds))
+    if whole_seconds % 60 == 0:
+        minutes = whole_seconds // 60
+        return f"{minutes} 分钟"
+    return f"{whole_seconds} 秒"
+
+
+def _render_api_key_setup_form(
+    dotenv_path: Path,
+    *,
+    timeout_seconds: float,
+    error_message: str | None = None,
+) -> str:
     safe_error = html.escape(error_message or "")
     safe_path = html.escape(str(dotenv_path))
     error_block = ""
@@ -222,6 +246,8 @@ def _render_api_key_setup_form(dotenv_path: Path, *, error_message: str | None =
             f"<strong>{safe_error}</strong>"
             "</div>"
         )
+    timeout_label = html.escape(_format_duration_label(timeout_seconds))
+    timeout_value = max(1, int(timeout_seconds))
 
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -313,6 +339,18 @@ def _render_api_key_setup_form(dotenv_path: Path, *, error_message: str | None =
       margin-top: 6px;
       font-size: 15px;
     }}
+    .countdown {{
+      display: grid;
+      gap: 8px;
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(154, 52, 18, 0.16);
+      background: rgba(255, 247, 237, 0.88);
+    }}
+    .countdown strong {{
+      font-size: clamp(20px, 4vw, 28px);
+      letter-spacing: 0.04em;
+    }}
     .notice-error {{
       border-color: rgba(194, 65, 12, 0.22);
       background: rgba(255, 237, 213, 0.8);
@@ -395,6 +433,13 @@ def _render_api_key_setup_form(dotenv_path: Path, *, error_message: str | None =
         <span class="eyebrow">持久化选项</span>
         <strong>勾选后会写入当前目录的 <code>{safe_path}</code>，下次运行可自动复用。</strong>
       </div>
+      <div class="countdown">
+        <span class="eyebrow">倒计时</span>
+        <strong id="countdown">--:--</strong>
+        <span class="meta">
+          当前页面默认保留 {timeout_label}。超时后，本次命令会结束但不会报系统错误。
+        </span>
+      </div>
       <form method="post" class="grid">
         <label>
           API Key
@@ -410,6 +455,22 @@ def _render_api_key_setup_form(dotenv_path: Path, *, error_message: str | None =
       </form>
     </section>
   </main>
+  <script>
+    (function () {{
+      var remaining = {timeout_value};
+      var node = document.getElementById("countdown");
+      function render() {{
+        var minutes = String(Math.floor(remaining / 60)).padStart(2, "0");
+        var seconds = String(remaining % 60).padStart(2, "0");
+        node.textContent = minutes + ":" + seconds;
+      }}
+      render();
+      window.setInterval(function () {{
+        remaining = Math.max(0, remaining - 1);
+        render();
+      }}, 1000);
+    }})();
+  </script>
 </body>
 </html>
 """
@@ -508,7 +569,13 @@ def launch_api_key_setup_page(
             self.wfile.write(data)
 
         def do_GET(self) -> None:  # noqa: N802
-            self._write_html(200, _render_api_key_setup_form(resolved_dotenv_path))
+            self._write_html(
+                200,
+                _render_api_key_setup_form(
+                    resolved_dotenv_path,
+                    timeout_seconds=timeout_seconds,
+                ),
+            )
 
         def do_POST(self) -> None:  # noqa: N802
             content_length = int(self.headers.get("Content-Length", "0"))
@@ -522,6 +589,7 @@ def launch_api_key_setup_page(
                     400,
                     _render_api_key_setup_form(
                         resolved_dotenv_path,
+                        timeout_seconds=timeout_seconds,
                         error_message="API key 不能为空，请粘贴从问财技能页复制的密钥。",
                     ),
                 )
@@ -557,7 +625,11 @@ def launch_api_key_setup_page(
     try:
         url = f"http://127.0.0.1:{server.server_port}/"
         setup_result["url"] = url
-        print(f"未检测到 IWENCAI_API_KEY，正在启动本地配置页: {url}", file=sys.stderr)
+        timeout_label = _format_duration_label(timeout_seconds)
+        print(
+            f"未检测到 IWENCAI_API_KEY，正在启动本地配置页: {url}，等待最多 {timeout_label}",
+            file=sys.stderr,
+        )
 
         if ready_callback is not None:
             ready_callback(url)
@@ -568,11 +640,22 @@ def launch_api_key_setup_page(
                 print(f"浏览器未自动打开，请手动访问: {url}", file=sys.stderr)
         setup_result["browser_opened"] = browser_opened
 
-        if not completed.wait(timeout_seconds):
-            raise IWenCaiAPIError(
-                "API密钥配置超时，请重新执行命令，"
-                "或通过环境变量 IWENCAI_API_KEY / 当前目录 .env 指定"
-            )
+        try:
+            if not completed.wait(timeout_seconds):
+                raise InteractiveSetupExit(
+                    status="timed_out",
+                    message=(
+                        f"等待 API 密钥配置已超时（{timeout_label}）。"
+                        "当前命令未执行；重新运行会再次打开本地配置页，"
+                        "也可提前写入当前目录 .env 或设置环境变量 IWENCAI_API_KEY。"
+                    ),
+                )
+        except KeyboardInterrupt as err:
+            raise InteractiveSetupExit(
+                status="cancelled",
+                message=("已取消本地 API 密钥配置，当前命令未执行。重新运行会再次打开本地配置页。"),
+                exit_code=130,
+            ) from err
         return setup_result
     finally:
         server.shutdown()
@@ -1602,6 +1685,32 @@ def main() -> None:
     except SimTradeAPIError as err:
         print(json.dumps({"success": False, "error": str(err)}, ensure_ascii=False, indent=2))
         sys.exit(1)
+    except InteractiveSetupExit as event:
+        print(
+            json.dumps(
+                {
+                    "success": False,
+                    "status": event.status,
+                    "message": event.message,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        sys.exit(event.exit_code)
+    except KeyboardInterrupt:
+        print(
+            json.dumps(
+                {
+                    "success": False,
+                    "status": "cancelled",
+                    "message": "用户已取消当前命令。",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        sys.exit(130)
     except Exception as err:
         print(
             json.dumps(

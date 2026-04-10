@@ -24,7 +24,7 @@ python iwencai_cli.py --help
 ## 配置 API Key
 
 `query2data` 和 `search` 需要 `IWENCAI_API_KEY`。可以直接传 `--api-key`，也可以用 `.env`。
-如果两者都没配好，在交互式终端里首次发起 `query2data/search` 时，CLI 会自动拉起一个本地 HTML 配置页，方便直接粘贴密钥，并可勾选保存到当前目录 `.env`。
+如果两者都没配好，在交互式终端里首次发起 `query2data/search` 时，CLI 会自动拉起一个本地 HTML 配置页，方便直接粘贴密钥，并可勾选保存到当前目录 `.env`。页面默认等待 10 分钟，并显示倒计时。
 
 推荐做法：
 
@@ -54,8 +54,9 @@ iwencai -q "2连板股票" --api-key your_api_key_here
 
 1. 直接运行任一需要密钥的 `query2data/search` 命令。
 2. CLI 会自动打开本地网页。
-3. 粘贴密钥，可选择是否持久化到当前目录 `.env`。
+3. 页面会显示倒计时；在时限内粘贴密钥，可选择是否持久化到当前目录 `.env`。
 4. 提交后，当前命令会继续执行。
+5. 如果超时或你主动取消，本次命令不会继续执行；重新运行即可再次打开配置页。
 
 `trade` 子命令不依赖 `IWENCAI_API_KEY`，但依赖本地模拟账户状态和上游交易服务可达。
 

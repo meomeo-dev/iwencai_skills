@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-04-10
+
+### Fixed
+
+- extend the interactive API key setup wait window to 10 minutes and surface a visible countdown on the local HTML page
+- treat interactive timeout and user cancellation as friendly command outcomes instead of surfacing a Python traceback
+
+### Changed
+
+- clarify the timeout and retry behavior for the local API key setup flow in CLI help and README
+
 ## [0.2.0] - 2026-04-10
 
 ### Added

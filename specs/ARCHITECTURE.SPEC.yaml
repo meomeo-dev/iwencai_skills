@@ -20,7 +20,6 @@ decisions:
 required_directories:
   - /specs
   - /tests
-  - /.iwencai
 required_files:
   - /README.md
   - /iwencai_cli.py

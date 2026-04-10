@@ -1,0 +1,37 @@
+spec_id: quality_gates
+version: 1
+python:
+  min_version: "3.11"
+dev_dependencies:
+  - detect-secrets>=1.5
+  - pytest>=8
+  - ruff>=0.6
+  - pyright>=1.1.408
+  - PyYAML>=6
+  - pre-commit>=4
+required_pre_commit_hooks:
+  - detect-secrets
+  - ruff-check
+  - ruff-format
+  - pytest
+  - pyright
+  - release-preflight
+lint_exclude_paths: []
+required_pyproject_sections:
+  - project.scripts
+  - tool.pytest.ini_options
+  - tool.setuptools
+  - tool.ruff
+  - tool.ruff.lint
+contract_tests_glob: tests/test_*_contract.py
+unit_tests_glob: tests/test_*_unit.py
+release_preflight:
+  hook_id: release-preflight
+  hook_entry: python tests/release_preflight.py
+  smoke_script: /tests/cli_smoke.py
+  preflight_script: /tests/release_preflight.py
+secret_scan:
+  hook_id: detect-secrets
+  hook_repo: https://github.com/Yelp/detect-secrets
+  hook_rev: v1.5.0
+  baseline_file: /.secrets.baseline

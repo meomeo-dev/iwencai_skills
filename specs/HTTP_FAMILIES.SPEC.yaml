@@ -1,0 +1,67 @@
+spec_id: http_families
+version: 1
+runtime_network:
+  no_proxy_hosts:
+    - openapi.iwencai.com
+    - trade.10jqka.com.cn
+families:
+  query2data:
+    method: POST
+    url: https://openapi.iwencai.com/v1/query2data
+    auth_env: IWENCAI_API_KEY
+    default_request:
+      page: "1"
+      limit: "10"
+      is_cache: "1"
+      expand_index: "true"
+    user_request_fields:
+      - query
+      - page
+      - limit
+    normalized_response:
+      items_field: datas
+      total_field: code_count
+      meta_fields:
+        - chunks_info
+  comprehensive_search:
+    method: POST
+    url: https://openapi.iwencai.com/v1/comprehensive/search
+    auth_env: IWENCAI_API_KEY
+    fixed_request:
+      app_id: AIME_SKILL
+    family_request_fields:
+      - channels
+    supported_channels:
+      - announcement
+      - investor
+      - news
+      - report
+    user_request_fields:
+      - query
+    normalized_response:
+      items_field: data
+      item_fields:
+        - title
+        - summary
+        - url
+        - publish_date
+  simtrade:
+    method: GET
+    base_url: http://trade.10jqka.com.cn:8088
+    local_state_file: /.iwencai/default_account.json
+    default_department_id: "997376"
+    order_constraints:
+      quantity_multiple: 100
+      directions:
+        - B
+        - S
+    endpoints:
+      bootstrap_account: /pt_add_user
+      shareholder_account: /pt_qry_stkaccount_dklc
+      buy_sell: /pt_stk_weituo_dklc
+      positions: /pt_web_qry_stock
+      profit: /pt_qry_userinfo_v1
+      fund: /pt_qry_fund_t
+      today_trades: /pt_qry_busin_nocache
+      history_trades: /pt_qry_busin1
+      gain_30d: /pt_qry_gainstat

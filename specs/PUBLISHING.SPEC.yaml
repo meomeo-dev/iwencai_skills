@@ -1,0 +1,60 @@
+spec_id: publishing
+version: 1
+objective: >
+  Ensure the repository can be published as a public GitHub project with the
+  minimum legal, operational, packaging, and governance artifacts in place.
+required_files:
+  - /LICENSE
+  - /.env.example
+  - /.github/workflows/ci.yml
+  - /.github/CODEOWNERS
+  - /CHANGELOG.md
+  - /CONTRIBUTING.md
+  - /SECURITY.md
+required_gitignore_patterns:
+  - .plan/
+  - .venv/
+  - venv/
+  - env/
+  - .coverage
+  - .coverage.*
+  - htmlcov/
+  - .idea/
+  - .vscode/
+  - pip-wheel-metadata/
+  - "*.log"
+required_readme_markers:
+  - IWENCAI_API_KEY
+  - .env.example
+  - cp .env.example .env
+  - --api-key
+license:
+  file: /LICENSE
+  title: MIT License
+pyproject:
+  required_project_keys:
+    - license
+    - authors
+    - urls
+    - classifiers
+  required_url_keys:
+    - Homepage
+    - Repository
+    - Issues
+    - Changelog
+  required_classifiers:
+    - "License :: OSI Approved :: MIT License"
+    - "Programming Language :: Python :: 3"
+    - "Programming Language :: Python :: 3.11"
+    - "Environment :: Console"
+ci:
+  workflow_path: /.github/workflows/ci.yml
+  required_events:
+    - push
+    - pull_request
+  required_run_markers:
+    - python -m pip install -e .[dev]
+    - pre-commit run --all-files
+codeowners:
+  path: /.github/CODEOWNERS
+  required_default_owner_prefix: "* @"

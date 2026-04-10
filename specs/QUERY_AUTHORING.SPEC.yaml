@@ -1,0 +1,205 @@
+spec_id: query_authoring
+version: 1
+objective: >
+  Capture the de facto query-writing conventions implied by the official
+  SKILL.md snapshots so users can author queries that the iWencai official
+  families parse more reliably.
+supported_runtime_families:
+  - query2data
+  - comprehensive_search
+  - simtrade
+documentation_surfaces:
+  readme_path: /README.md
+  readme_markers:
+    - Query 写法
+    - 弱 DSL
+    - 一条 query 只做一件事
+    - 主体 + 指标/事件
+    - 范围 + 条件/排序 + 时间窗
+    - 实体/主题 + 内容类型 + 时间词
+    - 不要只写公司名或主题名
+    - trade 不是自然语言 query 入口
+    - trade buy|sell --stock-code
+evidence:
+  provenance_status: distilled_from_retired_official_skill_snapshots
+  historical_inputs:
+    - retired official zip archives
+    - retired official SKILL.md extraction snapshots
+  retained_observations:
+    - query2data retrieval and selector SKILLs consistently instruct rewriting into standard finance phrases
+    - comprehensive_search SKILLs prefer keyword bundles that include explicit content type words
+    - simtrade SKILL expresses intent plus extractable parameters rather than analytical prose
+language_characterization:
+  label: weak_finance_dsl
+  properties:
+    - query has natural-language surface form but template-driven parsing core
+    - short finance-bearing phrases outperform chatty open-ended prose
+    - explicit entity, metric, event, content-type, ranking, comparator, and time words matter
+    - one query should normally target one runtime family and one primary intent
+    - official SKILLs frequently rewrite colloquial Chinese into standard finance phrases
+query_forms:
+  query2data_retrieval:
+    runtime_family: query2data
+    purpose: retrieve attributes, events, metrics, or static facts for a named entity or domain
+    canonical_shapes:
+      - <entity_or_domain> <metric_or_event>
+      - <time_window> <entity_or_domain> <metric_or_event>
+      - <market_scope> <domain> <metric_or_event>
+    required_slots:
+      any_of:
+        - [entity_or_domain, metric_or_event]
+        - [domain, metric_or_event]
+    optional_slots:
+      - time_window
+      - market_scope
+      - ranking
+      - comparator
+    strong_examples:
+      - 同花顺主营业务构成
+      - 2024年中国GDP
+      - 沪铜期货最新行情
+      - 上证指数涨跌幅
+      - 宁德时代业绩预告
+  query2data_selector:
+    runtime_family: query2data
+    purpose: screen or rank a universe by explicit predicates
+    canonical_shapes:
+      - <time_window> <metric_predicate> 的 <universe> <result_marker>
+      - <metric_predicate> 的 <universe> <result_marker>
+      - <metric_or_rank> <universe>
+    required_slots:
+      all_of:
+        - universe
+        - metric_predicate_or_rank
+    optional_slots:
+      - time_window
+      - market_scope
+      - result_marker
+      - paging
+    strong_examples:
+      - 今日涨跌幅超过5%的A股有哪些？
+      - 转股溢价率低于10%的可转债有哪些？
+      - 近一年收益排名前十的基金经理
+      - 规模排名前十的基金公司
+      - 涨幅前五的板块
+  comprehensive_search_keyword:
+    runtime_family: comprehensive_search
+    purpose: keyword search across announcement, news, report, or investor activity content
+    canonical_shapes:
+      - <entity_or_topic> <content_type> <time_window>
+      - <entity_or_topic> <content_type>
+      - <topic> <content_type>
+    required_slots:
+      all_of:
+        - entity_or_topic
+        - content_type_or_search_focus
+    optional_slots:
+      - time_window
+      - market_scope
+      - company_filter
+      - date_range
+    strong_examples:
+      - 贵州茅台 公告
+      - 人工智能最新动态
+      - 芯片行业研究报告
+      - 贵州茅台投资者关系活动
+      - 最近一个月的分红公告
+  simtrade_intent:
+    runtime_family: simtrade
+    purpose: express a trading action or account query with extractable parameters
+    canonical_shapes:
+      - <action> <quantity> <entity_or_code> <price>
+      - <account_query_intent>
+      - <history_query_intent> <date_range>
+    required_slots:
+      any_of:
+        - [action, entity_or_code]
+        - [account_query_intent]
+        - [history_query_intent, date_range]
+    optional_slots:
+      - quantity
+      - price
+      - date_range
+    strong_examples:
+      - 买入100股腾讯控股，价格300元
+      - 看看我持仓有哪些
+      - 我赚了多少钱
+      - 查询2024-01-01到2024-01-31的历史成交
+slot_taxonomy:
+  entity_tokens:
+    examples:
+      - 贵州茅台
+      - 宁德时代
+      - 同花顺
+      - 上证指数
+      - 沪铜期货
+  universe_tokens:
+    examples:
+      - A股
+      - ETF
+      - 可转债
+      - 基金经理
+      - 美股
+      - 板块
+  metric_or_event_tokens:
+    examples:
+      - 主营业务构成
+      - 营业收入
+      - 涨跌幅
+      - 隐含波动率
+      - 分红公告
+      - 业绩预告
+      - 目标价
+  comparator_tokens:
+    examples:
+      - 大于
+      - 超过
+      - 低于
+      - 小于
+      - 排名前十
+      - 涨幅前五
+  time_window_tokens:
+    examples:
+      - 今日
+      - 最近
+      - 最近一期
+      - 近一年
+      - 最近一个月
+      - 2024年
+  content_type_tokens:
+    examples:
+      - 公告
+      - 新闻
+      - 研究报告
+      - 投资者关系活动
+authoring_preferences:
+  - preserve the user's core finance intent
+  - prefer standard finance nouns over colloquial descriptions
+  - prefer explicit comparator, ranking, or time-window words when the user has them
+  - split independent subjects or intents into multiple queries instead of one overloaded query
+  - keep single-shot CLI queries self-contained without relying on prior context
+  - do not rely on empty-result retries; official query2data SKILLs explicitly say not to rewrite on empty data
+anti_patterns:
+  - id: unresolved_reference
+    description: standalone CLI query depends on prior conversational context
+    examples:
+      - 这只基金的持仓明细
+  - id: chatty_filler
+    description: polite fillers dominate the sentence while finance-bearing tokens are weak
+    examples:
+      - 麻烦帮我看一下最近那个AI板块有没有啥好消息
+  - id: mixed_family_query
+    description: one query mixes search, screening, and trading intents
+    examples:
+      - 查一下贵州茅台公告并筛出低市盈率白酒股
+      - 看看我持仓并买入100股腾讯控股
+  - id: vague_adjective_without_metric
+    description: words like 好、强、便宜、大 缺少可解析金融指标
+    examples:
+      - 帮我选好基金
+      - 找便宜的美股
+  - id: missing_content_type_for_search
+    description: search query only names an entity or topic but omits what to search for
+    examples:
+      - 贵州茅台
+      - 人工智能

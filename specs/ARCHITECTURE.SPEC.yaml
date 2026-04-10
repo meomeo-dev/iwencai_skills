@@ -1,0 +1,30 @@
+spec_id: architecture
+version: 1
+scope: OFFICIAL_ONLY
+objective: >
+  Maintain a single, auditable, spec-driven command line interface for the
+  official iWencai capability families after consolidation.
+constraints:
+  runtime_python_file: /iwencai_cli.py
+  runtime_dependencies: stdlib_only
+  specs_directory: /specs
+  tests_directory: /tests
+  mutable_state_directory: /.iwencai
+  repository_mode: runtime_only
+decisions:
+  - user-facing runtime is organized around official families, not runtime skill bindings
+  - historical source archives and extracted snapshots are retired from the repository
+  - query authoring guidance remains as distilled specs and rules, not live source snapshots
+  - contract tests validate delivery completeness from specs, not ad hoc assumptions
+  - local execution plans under `.plan/` are workflow artifacts and not published repository deliverables
+required_directories:
+  - /specs
+  - /tests
+  - /.iwencai
+required_files:
+  - /README.md
+  - /iwencai_cli.py
+  - /pyrightconfig.json
+  - /pyproject.toml
+  - /.pre-commit-config.yaml
+  - /.gitignore

@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iwencai-official-cli"
+version = "0.1.0"
+description = "Unified CLI for OFFICIAL iWencai skills"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "meomeo-dev", email = "meomeo-dev@users.noreply.github.com" },
+]
+requires-python = ">=3.11"
+dependencies = []
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Environment :: Console",
+]
+
+[project.scripts]
+iwencai = "iwencai_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/meomeo-dev/iwencai_skills"
+Repository = "https://github.com/meomeo-dev/iwencai_skills"
+Issues = "https://github.com/meomeo-dev/iwencai_skills/issues"
+Changelog = "https://github.com/meomeo-dev/iwencai_skills/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+  "detect-secrets>=1.5.0",
+  "pre-commit>=4.0.0",
+  "pyright>=1.1.408",
+  "pytest>=8.0.0",
+  "PyYAML>=6.0.0",
+  "ruff>=0.6.0",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+
+[tool.setuptools]
+py-modules = ["iwencai_cli"]
+
+[tool.ruff]
+exclude = []
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]

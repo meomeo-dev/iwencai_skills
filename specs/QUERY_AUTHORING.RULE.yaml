@@ -1,0 +1,199 @@
+rule_set_id: query_authoring_rules
+version: 1
+based_on: /specs/QUERY_AUTHORING.SPEC.yaml
+lint_levels:
+  pass: query is self-contained, finance-specific, and maps cleanly to one query form
+  warn: query may run, but ambiguity, vagueness, or overload is likely to reduce result quality
+  fail: query lacks core slots for its target form or mixes incompatible intents
+canonicalization_pipeline:
+  - detect the target query form first
+  - remove filler words and keep finance-bearing tokens
+  - normalize colloquial wording into standard finance nouns
+  - make the main subject, metric or content type, and operator explicit
+  - split unrelated subjects or intents into multiple queries
+  - keep the final query short, concrete, and single-family
+rules:
+  - id: common-001
+    severity: warn
+    targets:
+      - query2data_retrieval
+      - query2data_selector
+      - comprehensive_search_keyword
+      - simtrade_intent
+    title: Remove filler and keep finance-bearing tokens
+    guidance:
+      - avoid 麻烦、帮我看看、有没有啥、顺便、分析一下这种铺垫
+      - keep the rewritten query close to noun phrase, predicate phrase, or command phrase
+    examples:
+      bad:
+        - 麻烦帮我看一下最近那个AI板块有没有啥好消息
+      better:
+        - 人工智能板块最新动态
+  - id: common-002
+    severity: fail
+    targets:
+      - query2data_retrieval
+      - query2data_selector
+      - comprehensive_search_keyword
+      - simtrade_intent
+    title: One query should target one family and one primary intent
+    guidance:
+      - split search, screening, and trading into separate queries
+      - split unrelated subjects when official SKILLs suggest multiple API calls
+    examples:
+      bad:
+        - 查一下贵州茅台公告并筛出低市盈率白酒股
+      better:
+        - 贵州茅台 公告
+        - 低市盈率白酒股有哪些
+  - id: qd-001
+    severity: pass
+    targets:
+      - query2data_retrieval
+    title: Use entity or domain plus metric or event
+    guidance:
+      - retrieval queries work best as named subject plus target field, metric, or event
+      - good queries are usually short, direct, and finance-specific
+    examples:
+      preferred:
+        - 同花顺主营业务构成
+        - 2024年中国GDP
+        - 上证指数涨跌幅
+        - 沪铜期货最新行情
+  - id: qd-002
+    severity: warn
+    targets:
+      - query2data_retrieval
+    title: Rewrite colloquial finance requests into standard nouns
+    guidance:
+      - convert 口语描述 to standard finance terms before querying
+      - preserve meaning; do not invent a new subject
+    observed_official_rewrites:
+      - from: 给我选一个基金
+        to: 基金有哪些
+      - from: 给我选一个ETF
+        to: ETF有哪些
+      - from: 给我选一个港股
+        to: 港股有哪些
+  - id: qd-003
+    severity: fail
+    targets:
+      - query2data_selector
+    title: Selector queries need an explicit universe plus explicit predicate or ranking
+    guidance:
+      - name the universe such as A股、ETF、可转债、基金经理、美股、板块
+      - name the metric condition, threshold, or ranking signal
+      - adding 有哪些 is helpful for list-oriented results but not mandatory
+    examples:
+      bad:
+        - 帮我选好基金
+        - 找便宜的美股
+      better:
+        - 股票型基金有哪些？
+        - 美股市盈率低于20
+        - 转股溢价率低于10%的可转债有哪些？
+        - 近一年收益排名前十的基金经理
+  - id: qd-004
+    severity: warn
+    targets:
+      - query2data_selector
+    title: Prefer explicit comparators, ranks, and time windows
+    guidance:
+      - use 低于、大于、超过、排名前N、涨幅前N、近一年、今日、最近一期等词
+      - do not rely on the system to guess what 好、强、大、便宜 means
+    observed_official_rewrites:
+      - from: 帮我选涨得好的美股
+        to: 涨幅前五的美股
+      - from: 帮我选规模大的
+        to: 管理规模排名前十的基金公司
+      - from: 帮我选好经理
+        to: 近一年收益排名前十的基金经理
+  - id: qd-005
+    severity: warn
+    targets:
+      - query2data_retrieval
+      - query2data_selector
+    title: Split compound questions instead of overloading one query
+    guidance:
+      - if a sentence contains multiple dimensions, official SKILLs prefer multiple standard queries
+      - examples include 主营业务构成和主要客户, GDP和CPI数据, 研报评级和业绩预测
+    examples:
+      bad:
+        - 主营业务构成和主要客户
+      better:
+        - 主营业务构成
+        - 主要客户
+  - id: search-001
+    severity: pass
+    targets:
+      - comprehensive_search_keyword
+    title: Search queries work best as keyword bundles, not full analytical questions
+    guidance:
+      - use entity or topic plus content type such as 公告、新闻、研究报告、投资者关系活动
+      - append time words like 最近、最新、最近一个月 when recency matters
+    examples:
+      preferred:
+        - 贵州茅台 公告
+        - 人工智能最新动态
+        - 芯片行业研究报告
+        - 贵州茅台投资者关系活动
+  - id: search-002
+    severity: fail
+    targets:
+      - comprehensive_search_keyword
+    title: Always make the content type or search focus explicit
+    guidance:
+      - a bare company name or topic is usually too weak for search
+      - spell out whether you want 公告、新闻、研究报告, or 投资者关系活动
+    examples:
+      bad:
+        - 贵州茅台
+        - 人工智能
+      better:
+        - 贵州茅台 公告
+        - 人工智能最新动态
+        - 人工智能行业研究报告
+  - id: search-003
+    severity: warn
+    targets:
+      - comprehensive_search_keyword
+    title: Split multi-subject search queries into smaller keyword searches
+    guidance:
+      - official search SKILLs explicitly recommend splitting queries with multiple companies or topics
+      - merge results after querying, not before
+    examples:
+      bad:
+        - 最近贵州茅台和五粮液有什么公告？
+        - 人工智能和芯片行业的研究报告
+      better:
+        - 贵州茅台 公告
+        - 五粮液 公告
+        - 人工智能行业研究报告
+        - 芯片行业研究报告
+  - id: trade-001
+    severity: fail
+    targets:
+      - simtrade_intent
+    title: Trade queries must expose actionable intent and parameters
+    guidance:
+      - use 买入、卖出、持仓、资金、盈利、历史成交、近30天收益等明显意图词
+      - buy and sell queries should include stock name or code, and ideally quantity and price
+      - history queries should include a clear date range
+    examples:
+      preferred:
+        - 买入100股腾讯控股，价格300元
+        - 看看我持仓有哪些
+        - 查询2024-01-01到2024-01-31的历史成交
+  - id: trade-002
+    severity: warn
+    targets:
+      - simtrade_intent
+    title: Avoid unresolved pronouns in single-shot CLI use
+    guidance:
+      - phrases like 这只基金 or 那个股票 depend on prior context
+      - in CLI mode prefer explicit stock name or code
+    examples:
+      bad:
+        - 买入它100股
+      better:
+        - 买入600519 100股 价格1500元

@@ -27,3 +27,12 @@ pre-commit run --all-files
 - Update specs and contract tests together when changing behavior.
 - Prefer concise, explicit help text and examples.
 - Do not commit secrets, `.env`, local account state, or generated build artifacts.
+
+## Codex-Assisted Contributions
+
+Codex-assisted changes are allowed.
+
+- Treat Codex as an implementation assistant, not as a substitute for human review.
+- Keep `iwencai_cli.py`, `specs/*.SPEC.yaml`, and `tests/` in sync when behavior changes.
+- Do not accept generated code or text blindly; verify help text, contracts, and runtime behavior yourself.
+- Run the full local quality gate before pushing any Codex-assisted change.

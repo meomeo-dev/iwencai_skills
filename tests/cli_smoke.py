@@ -91,6 +91,7 @@ def main() -> None:
     payload = json.loads(query_without_key.stdout)
     assert payload["success"] is False
     assert "API密钥未设置" in payload["error"]
+    assert "自动拉起本地配置页" in payload["error"]
 
 
 if __name__ == "__main__":

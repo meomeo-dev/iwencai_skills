@@ -8,15 +8,19 @@
 from __future__ import annotations
 
 import argparse
+import html
+import http.server
 import json
 import os
 import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import MutableMapping
+import webbrowser
+from collections.abc import Callable, MutableMapping
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +44,7 @@ DEFAULT_PAGE = "1"
 DEFAULT_LIMIT = "10"
 DEFAULT_IS_CACHE = "1"
 DEFAULT_EXPAND_INDEX = "true"
+DEFAULT_API_KEY_SETUP_TIMEOUT_SECONDS = 300
 SEARCH_CHANNELS = ("announcement", "investor", "news", "report")
 SEARCH_CHANNEL_HELP = ", ".join(SEARCH_CHANNELS)
 DEFAULT_NO_PROXY_HOSTS = tuple(
@@ -76,6 +81,9 @@ ROOT_EPILOG = (
     "  query2data  通用自然语言查询、选股、排行、指标筛选\n"
     "  search      公告/新闻/研报/投关活动搜索，可按 channel 收窄\n"
     "  trade       模拟炒股开户、下单、持仓、资金、成交查询\n\n"
+    "认证 UX:\n"
+    "  query2data/search 未配置密钥时，交互式终端会自动拉起本地配置页\n"
+    "  页面支持粘贴 API key，并可选择保存到当前目录 .env\n\n"
     "Query 写法:\n"
     "  query2data  主体 + 指标/事件；筛选时写 范围 + 条件/排序 + 时间窗\n"
     "  search      实体/主题 + 内容类型 + 时间词，如 公告/新闻/研究报告/投关活动\n"
@@ -86,7 +94,8 @@ ROOT_EPILOG = (
 QUERY2DATA_DESCRIPTION = (
     "直接调用官方 query2data family。\n"
     "问财更像弱 DSL，不是闲聊句子。\n"
-    "适合自然语言条件查询、选股、排行、指标筛选；不需要指定 skill。"
+    "适合自然语言条件查询、选股、排行、指标筛选；不需要指定 skill。\n"
+    "若未配置 IWENCAI_API_KEY，交互式终端会自动打开本地配置页。"
 )
 QUERY2DATA_EPILOG = (
     "推荐 query 写法:\n"
@@ -100,7 +109,8 @@ QUERY2DATA_EPILOG = (
 )
 SEARCH_DESCRIPTION = (
     "直接调用官方 comprehensive/search family。\n"
-    "适合搜索公告、新闻、研报、投资者关系活动；不指定 --channel 时会搜索全部官方频道。"
+    "适合搜索公告、新闻、研报、投资者关系活动；不指定 --channel 时会搜索全部官方频道。\n"
+    "若未配置 IWENCAI_API_KEY，交互式终端会自动打开本地配置页。"
 )
 SEARCH_EPILOG = (
     "推荐 query 写法:\n"
@@ -148,6 +158,426 @@ class IWenCaiAPIError(Exception):
 
 class SimTradeAPIError(Exception):
     """模拟炒股运行时异常。"""
+
+
+def should_auto_launch_api_key_setup(
+    env: MutableMapping[str, str] | None = None,
+    *,
+    interactive: bool | None = None,
+) -> bool:
+    """判断是否应在缺少 API key 时自动拉起本地配置页。"""
+    if interactive is not None:
+        return interactive
+
+    target_env = os.environ if env is None else env
+    disable_flag = target_env.get("IWENCAI_DISABLE_API_KEY_WEB_BOOTSTRAP", "").strip().casefold()
+    if disable_flag in {"1", "true", "yes", "on"}:
+        return False
+    if target_env.get("CI", "").strip():
+        return False
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _format_dotenv_assignment(key: str, value: str) -> str:
+    escaped_value = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'{key}="{escaped_value}"'
+
+
+def upsert_dotenv_variable(dotenv_path: Path, key: str, value: str) -> Path:
+    """更新或新增 .env 变量，不破坏其他配置。"""
+    resolved_path = dotenv_path.resolve()
+    lines = resolved_path.read_text(encoding="utf-8").splitlines() if resolved_path.exists() else []
+    target_prefixes = (f"{key}=", f"export {key}=")
+    updated_lines: list[str] = []
+    replacement = _format_dotenv_assignment(key, value)
+    replaced = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(target_prefixes):
+            if not replaced:
+                updated_lines.append(replacement)
+                replaced = True
+            continue
+        updated_lines.append(line)
+
+    if not replaced:
+        if updated_lines and updated_lines[-1] != "":
+            updated_lines.append("")
+        updated_lines.append(replacement)
+
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
+    return resolved_path
+
+
+def _render_api_key_setup_form(dotenv_path: Path, *, error_message: str | None = None) -> str:
+    safe_error = html.escape(error_message or "")
+    safe_path = html.escape(str(dotenv_path))
+    error_block = ""
+    if safe_error:
+        error_block = (
+            '<div class="notice notice-error">'
+            '<span class="eyebrow">需要修正</span>'
+            f"<strong>{safe_error}</strong>"
+            "</div>"
+        )
+
+    return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>配置 IWENCAI_API_KEY</title>
+  <style>
+    :root {{
+      --bg: #f5efe2;
+      --panel: rgba(255, 251, 243, 0.92);
+      --ink: #1c1917;
+      --muted: #6b6257;
+      --line: rgba(28, 25, 23, 0.14);
+      --accent: #c2410c;
+      --accent-strong: #9a3412;
+      --shadow: 0 24px 80px rgba(28, 25, 23, 0.12);
+    }}
+    * {{
+      box-sizing: border-box;
+    }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(194, 65, 12, 0.16), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(120, 53, 15, 0.12), transparent 28%),
+        linear-gradient(135deg, #f8f2e8 0%, #efe4d2 100%);
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }}
+    .shell {{
+      width: min(720px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(14px);
+    }}
+    .hero {{
+      padding: 28px 28px 18px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.15)),
+        repeating-linear-gradient(
+          135deg,
+          rgba(28,25,23,0.02) 0,
+          rgba(28,25,23,0.02) 10px,
+          transparent 10px,
+          transparent 20px
+        );
+    }}
+    .eyebrow {{
+      display: inline-block;
+      margin-bottom: 10px;
+      color: var(--accent-strong);
+      font: 600 12px/1.2 "Menlo", "SFMono-Regular", "Cascadia Mono", monospace;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }}
+    h1 {{
+      margin: 0 0 10px;
+      font-size: clamp(28px, 5vw, 42px);
+      line-height: 1;
+    }}
+    p {{
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 16px;
+    }}
+    .body {{
+      padding: 24px 28px 28px;
+      display: grid;
+      gap: 18px;
+    }}
+    .notice {{
+      border-radius: 18px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.7);
+    }}
+    .notice strong {{
+      display: block;
+      margin-top: 6px;
+      font-size: 15px;
+    }}
+    .notice-error {{
+      border-color: rgba(194, 65, 12, 0.22);
+      background: rgba(255, 237, 213, 0.8);
+    }}
+    .grid {{
+      display: grid;
+      gap: 14px;
+    }}
+    label {{
+      display: grid;
+      gap: 8px;
+      font: 600 14px/1.4 "Menlo", "SFMono-Regular", "Cascadia Mono", monospace;
+      letter-spacing: 0.02em;
+    }}
+    input[type="password"] {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px 16px;
+      background: rgba(255,255,255,0.82);
+      color: var(--ink);
+      font: 500 15px/1.4 "Menlo", "SFMono-Regular", "Cascadia Mono", monospace;
+    }}
+    input[type="password"]:focus {{
+      outline: 2px solid rgba(194, 65, 12, 0.28);
+      border-color: rgba(194, 65, 12, 0.36);
+    }}
+    .check {{
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.68);
+    }}
+    .check input {{
+      margin-top: 3px;
+      accent-color: var(--accent);
+    }}
+    .meta {{
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }}
+    code {{
+      font-family: "Menlo", "SFMono-Regular", "Cascadia Mono", monospace;
+      font-size: 13px;
+      color: var(--accent-strong);
+    }}
+    button {{
+      border: 0;
+      border-radius: 999px;
+      padding: 14px 22px;
+      color: #fff7ed;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+      font: 700 14px/1 "Menlo", "SFMono-Regular", "Cascadia Mono", monospace;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+      justify-self: start;
+      box-shadow: 0 16px 32px rgba(154, 52, 18, 0.24);
+    }}
+    button:hover {{
+      transform: translateY(-1px);
+    }}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <span class="eyebrow">IWENCAI API</span>
+      <h1>配置访问密钥</h1>
+      <p>当前命令缺少 <code>IWENCAI_API_KEY</code>。在这里粘贴密钥后，命令会继续执行。</p>
+    </section>
+    <section class="body">
+      {error_block}
+      <div class="notice">
+        <span class="eyebrow">持久化选项</span>
+        <strong>勾选后会写入当前目录的 <code>{safe_path}</code>，下次运行可自动复用。</strong>
+      </div>
+      <form method="post" class="grid">
+        <label>
+          API Key
+          <input type="password" name="api_key" autocomplete="off" autofocus required>
+        </label>
+        <label class="check">
+          <input type="checkbox" name="persist_dotenv" checked>
+          <span class="meta">
+            保存到当前目录 <code>.env</code>。如果不勾选，本次只在当前进程内生效。
+          </span>
+        </label>
+        <button type="submit">保存并继续</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
+def _render_api_key_setup_success(dotenv_path: Path, *, persisted: bool) -> str:
+    saved_hint = (
+        f"已写入 <code>{html.escape(str(dotenv_path))}</code>，后续运行会自动加载。"
+        if persisted
+        else "仅对当前命令进程生效，未写入磁盘。"
+    )
+    return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>配置完成</title>
+  <style>
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f5efe2;
+      color: #1c1917;
+      font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+      padding: 24px;
+    }}
+    .card {{
+      width: min(560px, 100%);
+      padding: 28px;
+      border-radius: 24px;
+      border: 1px solid rgba(28, 25, 23, 0.14);
+      background: rgba(255, 251, 243, 0.94);
+      box-shadow: 0 24px 80px rgba(28, 25, 23, 0.12);
+    }}
+    h1 {{
+      margin: 0 0 10px;
+      font-size: clamp(26px, 4vw, 36px);
+    }}
+    p {{
+      margin: 0;
+      color: #6b6257;
+      line-height: 1.6;
+      font-size: 16px;
+    }}
+    code {{
+      font-family: "Menlo", "SFMono-Regular", "Cascadia Mono", monospace;
+      color: #9a3412;
+    }}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>密钥已接收，命令继续执行</h1>
+    <p>{saved_hint}</p>
+  </main>
+  <script>
+    window.setTimeout(function () {{
+      window.close();
+    }}, 1200);
+  </script>
+</body>
+</html>
+"""
+
+
+def launch_api_key_setup_page(
+    *,
+    dotenv_path: Path,
+    env: MutableMapping[str, str] | None = None,
+    open_browser: bool = True,
+    timeout_seconds: int = DEFAULT_API_KEY_SETUP_TIMEOUT_SECONDS,
+    ready_callback: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """启动本地 HTML 配置页，收集 API key 并可选择写入 .env。"""
+    target_env = os.environ if env is None else env
+    resolved_dotenv_path = dotenv_path.resolve()
+    completed = threading.Event()
+    setup_result: dict[str, Any] = {
+        "success": False,
+        "persisted": False,
+        "dotenv_path": str(resolved_dotenv_path),
+    }
+
+    class APIKeySetupHandler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+            return
+
+        def _write_html(self, status_code: int, body: str) -> None:
+            data = body.encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self) -> None:  # noqa: N802
+            self._write_html(200, _render_api_key_setup_form(resolved_dotenv_path))
+
+        def do_POST(self) -> None:  # noqa: N802
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length).decode("utf-8")
+            form = urllib.parse.parse_qs(raw_body, keep_blank_values=True)
+            api_key_value = form.get("api_key", [""])[0].strip()
+            persist_dotenv = form.get("persist_dotenv", [""])[0] in {"on", "1", "true", "yes"}
+
+            if not api_key_value:
+                self._write_html(
+                    400,
+                    _render_api_key_setup_form(
+                        resolved_dotenv_path,
+                        error_message="API key 不能为空，请粘贴从问财技能页复制的密钥。",
+                    ),
+                )
+                return
+
+            target_env["IWENCAI_API_KEY"] = api_key_value
+            setup_result["api_key"] = api_key_value
+            setup_result["persisted"] = persist_dotenv
+            setup_result["success"] = True
+
+            if persist_dotenv:
+                written_path = upsert_dotenv_variable(
+                    resolved_dotenv_path,
+                    "IWENCAI_API_KEY",
+                    api_key_value,
+                )
+                setup_result["dotenv_path"] = str(written_path)
+
+            self._write_html(
+                200,
+                _render_api_key_setup_success(
+                    resolved_dotenv_path,
+                    persisted=persist_dotenv,
+                ),
+            )
+            completed.set()
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), APIKeySetupHandler)
+    server.daemon_threads = True
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+    try:
+        url = f"http://127.0.0.1:{server.server_port}/"
+        setup_result["url"] = url
+        print(f"未检测到 IWENCAI_API_KEY，正在启动本地配置页: {url}", file=sys.stderr)
+
+        if ready_callback is not None:
+            ready_callback(url)
+            browser_opened = False
+        else:
+            browser_opened = webbrowser.open(url) if open_browser else False
+            if not browser_opened:
+                print(f"浏览器未自动打开，请手动访问: {url}", file=sys.stderr)
+        setup_result["browser_opened"] = browser_opened
+
+        if not completed.wait(timeout_seconds):
+            raise IWenCaiAPIError(
+                "API密钥配置超时，请重新执行命令，"
+                "或通过环境变量 IWENCAI_API_KEY / 当前目录 .env 指定"
+            )
+        return setup_result
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=1)
 
 
 def ensure_no_proxy_hosts(
@@ -228,6 +658,8 @@ def get_api_key(
     *,
     env: MutableMapping[str, str] | None = None,
     dotenv_paths: tuple[Path, ...] = DEFAULT_DOTENV_PATHS,
+    interactive_bootstrap: bool | None = None,
+    bootstrapper: Callable[..., dict[str, Any]] | None = None,
 ) -> str:
     """优先使用显式参数，否则从环境变量或本地 .env 获取 API key。"""
     if api_key:
@@ -236,8 +668,23 @@ def get_api_key(
     target_env = os.environ if env is None else env
     load_local_env(dotenv_paths=dotenv_paths, env=target_env)
     resolved_key = target_env.get("IWENCAI_API_KEY", "")
+    should_bootstrap = should_auto_launch_api_key_setup(
+        env=target_env,
+        interactive=interactive_bootstrap,
+    )
+
+    if not resolved_key and should_bootstrap:
+        setup = (bootstrapper or launch_api_key_setup_page)(
+            dotenv_path=dotenv_paths[0],
+            env=target_env,
+        )
+        resolved_key = str(setup.get("api_key", "")).strip()
+
     if not resolved_key:
-        raise IWenCaiAPIError("API密钥未设置，请通过参数 --api-key 或环境变量 IWENCAI_API_KEY 指定")
+        raise IWenCaiAPIError(
+            "API密钥未设置，请通过环境变量 IWENCAI_API_KEY 或当前目录 .env 指定；"
+            "交互式终端会自动拉起本地配置页"
+        )
     return resolved_key
 
 
@@ -443,7 +890,9 @@ def _add_api_key_option(container: Any) -> None:
         "--api-key",
         type=str,
         default=None,
-        help="问财 API 密钥；未提供时会从 IWENCAI_API_KEY 或本地 .env 读取",
+        help=(
+            "问财 API 密钥；未提供时会先读 IWENCAI_API_KEY/.env，交互式终端缺失时自动打开本地配置页"
+        ),
     )
 
 

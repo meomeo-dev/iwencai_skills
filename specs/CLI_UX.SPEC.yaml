@@ -12,6 +12,7 @@ principles:
   - human_friendly_table_output_when_requested
   - family_first_subcommands
   - direct_query2data_without_skill_binding
+  - automatic_interactive_api_key_web_bootstrap
 top_level_commands:
   - name: query2data
     purpose: execute the generic query2data family directly
@@ -67,6 +68,8 @@ help_surface:
     - 省略 family 时，默认按 query2data 执行
     - 快速开始
     - iwencai -q "2连板股票"
+    - 认证 UX
+    - 未配置密钥时，交互式终端会自动拉起本地配置页
     - Query 写法
     - 主体 + 指标/事件
     - 实体/主题 + 内容类型 + 时间词
@@ -78,6 +81,7 @@ help_surface:
     - 输出控制
     - 不需要指定 skill
     - 问财更像弱 DSL
+    - 交互式终端会自动打开本地配置页
     - 主体 + 指标/事件
     - 范围 + 条件/排序 + 时间窗
   search_markers:
@@ -87,6 +91,7 @@ help_surface:
     - 输出控制
     - 可用 channel
     - announcement, investor, news, report
+    - 交互式终端会自动打开本地配置页
     - 实体/主题 + 内容类型 + 时间词
     - 不要只写公司名或主题名
     - 多主体时拆分查询

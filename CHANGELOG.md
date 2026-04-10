@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-04-10
+
+### Added
+
+- automatically launch a local HTML API key setup page for interactive `query2data` and `search` runs when neither `.env` nor `IWENCAI_API_KEY` is configured
+- allow the setup page to persist the pasted API key into the current working directory `.env`
+
+### Changed
+
+- document the interactive API key bootstrap flow in CLI help and README
+- keep the runtime implementation single-file by embedding the setup page directly in `iwencai_cli.py`
+
 ## [0.1.1] - 2026-04-10
 
 ### Fixed

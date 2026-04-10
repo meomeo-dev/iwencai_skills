@@ -3,7 +3,8 @@
 单文件、family-first 的同花顺问财 CLI。
 
 本项目基于 <https://www.iwencai.com/skillhub> 的官方技能整合而成，收敛为一个统一的 CLI 工具。
-`IWENCAI_API_KEY` 可在登录后从对应技能页面复制获得。
+`IWENCAI_API_KEY` 的获取方式：
+先登录 <https://www.iwencai.com/skillhub>，点击任意一个技能，在弹出的技能窗口中即可看到并复制 `IWENCAI_API_KEY`。
 原始 skill 为 MIT License，本项目继承并延续 MIT License。
 
 ## 安装
@@ -25,6 +26,8 @@ python iwencai_cli.py --help
 
 `query2data` 和 `search` 需要 `IWENCAI_API_KEY`。可以直接传 `--api-key`，也可以用 `.env`。
 如果两者都没配好，在交互式终端里首次发起 `query2data/search` 时，CLI 会自动拉起一个本地 HTML 配置页，方便直接粘贴密钥，并可勾选保存到当前目录 `.env`。页面默认等待 10 分钟，并显示倒计时。
+
+如果你还没有 key，先到 <https://www.iwencai.com/skillhub> 登录，点击任意技能，在技能弹窗里复制 `IWENCAI_API_KEY`。
 
 推荐做法：
 

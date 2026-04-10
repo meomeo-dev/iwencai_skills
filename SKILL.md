@@ -72,6 +72,12 @@ Canonical public entrypoint is `iwencai`. Use that in examples unless there is a
 
 `query2data` and `search` require an API key.
 
+How to obtain it:
+
+1. sign in at <https://www.iwencai.com/skillhub>
+2. click any skill card
+3. in the skill popup/dialog, copy the visible `IWENCAI_API_KEY`
+
 Resolution order:
 
 1. explicit `--api-key`

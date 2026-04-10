@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.3] - 2026-04-10
+
+### Changed
+
+- clarify in `README.md` and `SKILL.md` that `IWENCAI_API_KEY` is obtained by signing in to `https://www.iwencai.com/skillhub`, opening any skill, and copying the key from the skill popup
+
 ## [0.2.2] - 2026-04-10
 
 ### Changed

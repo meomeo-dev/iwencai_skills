@@ -249,6 +249,31 @@ Translate them into explicit subcommands instead.
 
 ## Common Failure Modes
 
+#### Launching the config page in non-TTY environments (Claude Code, CI, scripts)
+
+The CLI auto-launches a browser config page only when stdin and stdout are both TTY. In Claude Code or any non-TTY context, the auto-launch is suppressed.
+
+Workaround — call `launch_api_key_setup_page()` directly in a background process:
+
+```bash
+nohup python3 -c "
+from iwencai_cli import launch_api_key_setup_page
+from pathlib import Path
+result = launch_api_key_setup_page(
+    dotenv_path=Path('/path/to/your/.env'),
+    open_browser=True,
+    timeout_seconds=300,
+)
+print('DONE', result.get('api_key','')[:10])
+" > /tmp/iwencai_setup.log 2>&1 &
+sleep 2
+cat /tmp/iwencai_setup.log
+```
+
+Replace `/path/to/your/.env` with the actual path where the API key should be persisted (e.g. the project root `.env`). The log will print the server URL such as `http://127.0.0.1:<port>/`. Open that URL in a browser, enter the key, and submit. The key is saved to the `.env` file and the server shuts down automatically after `timeout_seconds`.
+
+Why `nohup` is required: without it, the HTTP server process exits immediately when the parent shell exits, closing the config page before the user can submit.
+
 ### Missing API key
 
 Typical error:

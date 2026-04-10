@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2026-04-10
+
+### Changed
+
+- document how to launch the local API key config page from non-TTY environments such as Claude Code, CI, and scripts in `SKILL.md`
+
 ## [0.2.1] - 2026-04-10
 
 ### Fixed

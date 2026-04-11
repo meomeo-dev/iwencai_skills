@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.4] - 2026-04-11
+
+### Added
+
+- add `iwencai skillbook` as a top-level command that outputs the bundled `SKILL.md` so stateless LLMs can load usage guidance and choose the right family quickly
+- allow `iwencai skillbook --format json` and `iwencai skillbook --output ...` for machine-readable or file-based onboarding flows
+
+### Changed
+
+- package `SKILL.md` into the installed distribution so `iwencai skillbook` works both from the repository checkout and after `pip`/`pipx` installation
+- extend CLI UX specs, README guidance, contract tests, unit tests, and release-preflight smoke coverage for the new skillbook surface
+
 ## [0.2.3] - 2026-04-10
 
 ### Changed

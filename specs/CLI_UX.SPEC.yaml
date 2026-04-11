@@ -36,6 +36,11 @@ top_level_commands:
       - --format
       - --output
       - --api-key
+  - name: skillbook
+    purpose: output the bundled SKILL.md so a stateless LLM can learn iwencai quickly
+    optional_options:
+      - --format
+      - --output
   - name: trade
     purpose: execute simulate trading actions
     subcommands:
@@ -53,6 +58,9 @@ output_formats:
   - json
   - jsonl
   - table
+skillbook_output_formats:
+  - markdown
+  - json
 search_channels:
   - announcement
   - investor
@@ -68,12 +76,15 @@ help_surface:
     - 省略 family 时，默认按 query2data 执行
     - 快速开始
     - iwencai -q "2连板股票"
+    - iwencai skillbook
+    - skillbook   输出内置 SKILL.md
     - 认证 UX
     - 未配置密钥时，交互式终端会自动拉起本地配置页
     - 默认等待 10 分钟
     - Query 写法
     - 主体 + 指标/事件
     - 实体/主题 + 内容类型 + 时间词
+    - 无状态 LLM
   query2data_markers:
     - 查询输入
     - 分页控制
@@ -96,6 +107,13 @@ help_surface:
     - 实体/主题 + 内容类型 + 时间词
     - 不要只写公司名或主题名
     - 多主体时拆分查询
+  skillbook_markers:
+    - 输出控制
+    - 输出内置技能书 SKILL.md
+    - 默认直接输出原始 Markdown
+    - 适合无状态 LLM 直接读取
+    - iwencai skillbook
+    - iwencai skillbook --format json
   trade_markers:
     - 交易动作
     - 首次使用建议先执行 bootstrap-account
@@ -107,9 +125,16 @@ help_surface:
 common_error_codes:
   - missing_api_key
   - invalid_search_channel
+  - missing_skillbook_file
   - unsupported_action
   - invalid_date
   - invalid_trade_quantity
   - invalid_trade_direction
   - interactive_api_key_setup_timed_out
   - interactive_api_key_setup_cancelled
+documentation_surface:
+  readme_markers:
+    - iwencai skillbook
+    - SKILL.md
+    - 无状态 LLM
+    - --format json

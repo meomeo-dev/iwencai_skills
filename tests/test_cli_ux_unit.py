@@ -14,9 +14,20 @@ def test_parse_args_defaults_to_query2data_when_command_is_omitted() -> None:
     assert args.query == "2连板股票"
 
 
+def test_parse_args_keeps_skillbook_as_explicit_command() -> None:
+    args = iwencai_cli.parse_args(["skillbook"])
+    assert args.command == "skillbook"
+    assert args.format == "markdown"
+
+
 def test_render_output_jsonl_uses_items() -> None:
     text = iwencai_cli.render_output({"items": [{"a": 1}, {"a": 2}]}, "jsonl")
     assert text.splitlines() == ['{"a": 1}', '{"a": 2}']
+
+
+def test_render_output_markdown_uses_content_field() -> None:
+    text = iwencai_cli.render_output({"content": "# Skillbook"}, "markdown")
+    assert text == "# Skillbook"
 
 
 def test_render_output_table_for_mapping() -> None:
@@ -64,6 +75,19 @@ def test_handle_search_command_executes_family_search(monkeypatch: pytest.Monkey
     )
     payload = iwencai_cli.handle_search_command(args)
     assert payload["family"] == "comprehensive_search"
+
+
+def test_handle_skillbook_command_executes_skillbook_loader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        iwencai_cli,
+        "execute_skillbook_command",
+        lambda: {"success": True, "command": "skillbook", "content": "# Skillbook"},
+    )
+
+    payload = iwencai_cli.handle_skillbook_command(argparse.Namespace())
+    assert payload["command"] == "skillbook"
 
 
 def test_parse_args_rejects_trade_without_action() -> None:

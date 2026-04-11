@@ -59,6 +59,7 @@ def main() -> None:
         [
             "family 子命令",
             'iwencai -q "2连板股票"',
+            "iwencai skillbook",
             "Query 写法",
         ],
     )
@@ -79,6 +80,31 @@ def main() -> None:
         executable, "trade", "--help", cwd=cwd, env=env, expected_returncode=0
     )
     _assert_markers(trade_help.stdout, ["交易动作", "iwencai trade bootstrap-account"])
+
+    skillbook_help = _run_command(
+        executable, "skillbook", "--help", cwd=cwd, env=env, expected_returncode=0
+    )
+    _assert_markers(
+        skillbook_help.stdout,
+        ["输出内置技能书 SKILL.md", "默认直接输出原始 Markdown", "iwencai skillbook"],
+    )
+
+    skillbook_output = _run_command(
+        executable,
+        "skillbook",
+        cwd=cwd,
+        env=env,
+        expected_returncode=0,
+    )
+    _assert_markers(
+        skillbook_output.stdout,
+        [
+            "# iWencai Official CLI",
+            "query2data",
+            "search",
+            "trade",
+        ],
+    )
 
     query_without_key = _run_command(
         executable,

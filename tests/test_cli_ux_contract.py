@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 
 import iwencai_cli
-from tests.helpers import load_spec
+from tests.helpers import load_spec, repo_path
 
 
 def _get_subparser_action(parser: argparse.ArgumentParser) -> argparse._SubParsersAction:
@@ -56,6 +56,19 @@ def test_search_command_exposes_required_cli_options() -> None:
     }
 
     for option in {"--query", "--channel", "--limit", "--format", "--output", "--api-key"}:
+        assert option in option_strings
+
+
+def test_skillbook_command_exposes_required_cli_options() -> None:
+    parser = iwencai_cli.build_parser()
+    skillbook_parser = _get_subparser_action(parser).choices["skillbook"]
+    option_strings = {
+        option
+        for action in skillbook_parser._actions  # noqa: SLF001
+        for option in action.option_strings
+    }
+
+    for option in {"--format", "--output"}:
         assert option in option_strings
 
 
@@ -114,6 +127,16 @@ def test_search_help_contains_required_markers() -> None:
         assert marker in help_text
 
 
+def test_skillbook_help_contains_required_markers() -> None:
+    spec = load_spec("CLI_UX.SPEC.yaml")
+    parser = iwencai_cli.build_parser()
+    skillbook_parser = _get_subparser_action(parser).choices["skillbook"]
+    help_text = skillbook_parser.format_help()
+
+    for marker in spec["help_surface"]["skillbook_markers"]:
+        assert marker in help_text
+
+
 def test_trade_help_contains_required_markers() -> None:
     spec = load_spec("CLI_UX.SPEC.yaml")
     parser = iwencai_cli.build_parser()
@@ -133,3 +156,11 @@ def test_trade_buy_help_contains_required_markers() -> None:
 
     for marker in spec["help_surface"]["trade_buy_markers"]:
         assert marker in help_text
+
+
+def test_readme_contains_skillbook_markers() -> None:
+    spec = load_spec("CLI_UX.SPEC.yaml")
+    readme = repo_path("/README.md").read_text(encoding="utf-8")
+
+    for marker in spec["documentation_surface"]["readme_markers"]:
+        assert marker in readme

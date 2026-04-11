@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iwencai-official-cli"
-version = "0.2.3"
+version = "0.2.4"
 description = "Unified CLI for OFFICIAL iWencai skills"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -46,6 +46,9 @@ testpaths = ["tests"]
 
 [tool.setuptools]
 py-modules = ["iwencai_cli"]
+
+[tool.setuptools.data-files]
+"share/iwencai-official-cli" = ["SKILL.md"]
 
 [tool.ruff]
 exclude = []

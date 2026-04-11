@@ -2,7 +2,7 @@
 """
 同花顺问财(iWencai)统一 CLI 运行时。
 
-当前阶段提供 family-first 的 query2data/search/trade CLI。
+当前阶段提供 family-first 的 query2data/search/trade CLI，以及内置 skillbook 输出。
 """
 
 from __future__ import annotations
@@ -30,6 +30,9 @@ DEFAULT_SEARCH_APP_ID = "AIME_SKILL"
 DEFAULT_SIMTRADE_BASE_URL = "http://trade.10jqka.com.cn:8088"
 CANONICAL_PROGRAM_NAME = "iwencai"
 DEVELOPMENT_ENTRYPOINT = "python iwencai_cli.py"
+SKILLBOOK_FILE_NAME = "SKILL.md"
+SKILLBOOK_INSTALL_DIR = "iwencai-official-cli"
+DEFAULT_SKILLBOOK_FORMAT = "markdown"
 DEFAULT_SIMTRADE_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -76,11 +79,13 @@ ROOT_EPILOG = (
     "快速开始:\n"
     f'  {CANONICAL_PROGRAM_NAME} -q "2连板股票"\n'
     f'  {CANONICAL_PROGRAM_NAME} search -q "最近的分红公告" --channel announcement\n'
-    f"  {CANONICAL_PROGRAM_NAME} trade positions --format table\n\n"
+    f"  {CANONICAL_PROGRAM_NAME} trade positions --format table\n"
+    f"  {CANONICAL_PROGRAM_NAME} skillbook\n\n"
     "family 说明:\n"
     "  query2data  通用自然语言查询、选股、排行、指标筛选\n"
     "  search      公告/新闻/研报/投关活动搜索，可按 channel 收窄\n"
-    "  trade       模拟炒股开户、下单、持仓、资金、成交查询\n\n"
+    "  trade       模拟炒股开户、下单、持仓、资金、成交查询\n"
+    "  skillbook   输出内置 SKILL.md，帮助无状态 LLM 快速上手\n\n"
     "认证 UX:\n"
     "  query2data/search 未配置密钥时，交互式终端会自动拉起本地配置页\n"
     "  页面支持粘贴 API key，并可选择保存到当前目录 .env\n"
@@ -90,6 +95,7 @@ ROOT_EPILOG = (
     "  search      实体/主题 + 内容类型 + 时间词，如 公告/新闻/研究报告/投关活动\n"
     "  trade       显式子命令 + 参数，如 "
     "trade buy --stock-code 600519 --quantity 100 --price 1500\n"
+    "  skillbook   直接读取内置技能书，适合给无状态 LLM 建立认知框架\n"
     "  避免        只写公司名、只写 好/强/便宜、把多个 family 混成一条"
 )
 QUERY2DATA_DESCRIPTION = (
@@ -132,6 +138,16 @@ TRADE_EPILOG = (
     f"  {CANONICAL_PROGRAM_NAME} trade bootstrap-account\n"
     f"  {CANONICAL_PROGRAM_NAME} trade positions --format table\n"
     f"  {CANONICAL_PROGRAM_NAME} trade buy --stock-code 600519 --price 1500 --quantity 100"
+)
+SKILLBOOK_DESCRIPTION = (
+    "输出内置技能书 SKILL.md。\n"
+    "默认直接输出原始 Markdown，适合无状态 LLM 直接读取并建立 iwencai 使用框架。"
+)
+SKILLBOOK_EPILOG = (
+    "示例:\n"
+    f"  {CANONICAL_PROGRAM_NAME} skillbook\n"
+    f"  {CANONICAL_PROGRAM_NAME} skillbook --format json\n"
+    f"  {CANONICAL_PROGRAM_NAME} skillbook --output ./iwencai-skillbook.md"
 )
 BUY_DESCRIPTION = "提交模拟买入委托。\n仅支持 6 位 A 股代码；数量必须为 100 股整数倍。"
 SELL_DESCRIPTION = "提交模拟卖出委托。\n仅支持 6 位 A 股代码；数量必须为 100 股整数倍。"
@@ -979,6 +995,42 @@ def _add_api_key_option(container: Any) -> None:
     )
 
 
+def _add_skillbook_output_options(container: Any) -> None:
+    container.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default=DEFAULT_SKILLBOOK_FORMAT,
+        help="输出格式；markdown 默认输出原始技能书，json 适合程序消费",
+    )
+    container.add_argument(
+        "--output", type=str, default=None, help="输出文件路径；默认直接打印到终端"
+    )
+
+
+def get_skillbook_candidate_paths() -> list[Path]:
+    module_dir = Path(__file__).resolve().parent
+    return [
+        module_dir / SKILLBOOK_FILE_NAME,
+        Path(sys.prefix) / "share" / SKILLBOOK_INSTALL_DIR / SKILLBOOK_FILE_NAME,
+    ]
+
+
+def resolve_skillbook_path() -> Path:
+    for candidate in get_skillbook_candidate_paths():
+        if candidate.is_file():
+            return candidate
+    searched_paths = "、".join(str(path) for path in get_skillbook_candidate_paths())
+    raise ValueError(f"未找到内置技能书 {SKILLBOOK_FILE_NAME}。已检查路径: {searched_paths}")
+
+
+def load_skillbook_content() -> tuple[Path, str]:
+    skillbook_path = resolve_skillbook_path()
+    try:
+        return skillbook_path, skillbook_path.read_text(encoding="utf-8")
+    except OSError as err:
+        raise ValueError(f"读取内置技能书失败: {skillbook_path} ({err})") from err
+
+
 def build_parser(prog: str = CANONICAL_PROGRAM_NAME) -> argparse.ArgumentParser:
     """构建统一 CLI parser。"""
     parser = argparse.ArgumentParser(
@@ -1066,6 +1118,16 @@ def build_parser(prog: str = CANONICAL_PROGRAM_NAME) -> argparse.ArgumentParser:
     _add_api_key_option(search_auth_group)
     search_output_group = search_parser.add_argument_group("输出控制")
     _add_output_options(search_output_group)
+
+    skillbook_parser = subparsers.add_parser(
+        "skillbook",
+        help="输出内置技能书，帮助无状态 LLM 快速上手",
+        description=SKILLBOOK_DESCRIPTION,
+        epilog=SKILLBOOK_EPILOG,
+        formatter_class=CLIHelpFormatter,
+    )
+    skillbook_output_group = skillbook_parser.add_argument_group("输出控制")
+    _add_skillbook_output_options(skillbook_output_group)
 
     trade_parser = subparsers.add_parser(
         "trade",
@@ -1168,7 +1230,7 @@ def _normalize_argv(argv: list[str]) -> list[str]:
         return []
     if argv[0] in {"-h", "--help"}:
         return argv
-    if argv[0] not in {"query2data", "search", "trade"}:
+    if argv[0] not in {"query2data", "search", "skillbook", "trade"}:
         return ["query2data", *argv]
     return argv
 
@@ -1524,6 +1586,16 @@ def query_simtrade_gain_30d(account_path: Path = DEFAULT_ACCOUNT_PATH) -> dict:
     return {"item": payload.get("data", {}), "account_id": account["capital_account"]}
 
 
+def execute_skillbook_command() -> dict:
+    skillbook_path, content = load_skillbook_content()
+    return {
+        "success": True,
+        "command": "skillbook",
+        "source_path": str(skillbook_path),
+        "content": content,
+    }
+
+
 def _normalize_trade_date(raw_value: str) -> str:
     compact = raw_value.replace("-", "")
     if not re.fullmatch(r"\d{8}", compact):
@@ -1575,6 +1647,12 @@ def _render_table_rows(rows: list[dict]) -> str:
 
 
 def render_output(payload: object, output_format: str) -> str:
+    if output_format == "markdown":
+        if isinstance(payload, dict) and isinstance(payload.get("content"), str):
+            return payload["content"]
+        if isinstance(payload, str):
+            return payload
+        raise ValueError("markdown 输出仅支持字符串或带 content 字段的对象")
     if output_format == "json":
         return json.dumps(payload, ensure_ascii=False, indent=2)
     if output_format == "jsonl":
@@ -1624,6 +1702,11 @@ def handle_search_command(args: argparse.Namespace) -> dict:
     )
 
 
+def handle_skillbook_command(args: argparse.Namespace) -> dict:
+    del args
+    return execute_skillbook_command()
+
+
 def handle_trade_command(args: argparse.Namespace) -> dict:
     if args.trade_command == "bootstrap-account":
         return bootstrap_simtrade_account()
@@ -1670,6 +1753,8 @@ def main() -> None:
             payload = handle_query2data_command(args)
         elif args.command == "search":
             payload = handle_search_command(args)
+        elif args.command == "skillbook":
+            payload = handle_skillbook_command(args)
         elif args.command == "trade":
             payload = handle_trade_command(args)
         else:

@@ -22,6 +22,7 @@ required_directories:
   - /tests
 required_files:
   - /README.md
+  - /SKILL.md
   - /iwencai_cli.py
   - /pyrightconfig.json
   - /pyproject.toml

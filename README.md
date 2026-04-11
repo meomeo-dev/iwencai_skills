@@ -12,6 +12,7 @@
 ```bash
 pip install .
 iwencai --help
+iwencai skillbook
 ```
 
 安装后会生成 `iwencai` 命令。
@@ -69,6 +70,29 @@ iwencai -q "2连板股票" --api-key your_api_key_here
 iwencai -q "2连板股票"
 iwencai search -q "最近的分红公告" --channel announcement
 iwencai trade positions --format table
+iwencai skillbook
+```
+
+## 技能书 / 无状态 LLM 上手
+
+`iwencai skillbook` 会直接输出仓库内置的 `SKILL.md` 原文，适合无状态 LLM 在没有上下文记忆时先加载一份“如何使用 iwencai”的技能书，再决定该用 `query2data`、`search` 还是 `trade`。
+
+默认输出是原始 Markdown，便于直接喂给模型：
+
+```bash
+iwencai skillbook
+```
+
+如果调用方更适合接结构化结果，也可以显式改成 JSON：
+
+```bash
+iwencai skillbook --format json
+```
+
+也支持直接写入文件：
+
+```bash
+iwencai skillbook --output ./iwencai-skillbook.md
 ```
 
 ## Query 写法
@@ -190,6 +214,7 @@ trade 不是自然语言 query 入口，而是显式子命令。
 
 ```bash
 iwencai --help
+iwencai skillbook --help
 iwencai query2data --help
 iwencai search --help
 iwencai trade --help
